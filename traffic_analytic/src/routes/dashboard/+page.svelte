@@ -1,9 +1,10 @@
 <script lang="ts">
   import { page } from '$app/stores';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte'; // 1. เพิ่ม onMount
 
   const qp = () => $page.url.searchParams;
-
+  $: videoFile = qp().get('video') ?? ''; // รับชื่อไฟล์วิดีโอมาจากหน้า upload
+  
   // read settings from Input page
   $: camera = qp().get('camera') ?? 'Cam 01 - Main Road';
   $: mode = qp().get('mode') ?? 'realtime';
@@ -13,18 +14,18 @@
   $: speedTh = Number(qp().get('speed') ?? 5);
   $: durationTh = Number(qp().get('duration') ?? 5);
 
-  // mock realtime data
+  // 2. เปลี่ยนตัวเลขจำลองตั้งต้นเป็น 0
   let lastUpdated = new Date();
-  let flowRate = 45;         // vehicles/min
-  let totalToday = 1250;     // vehicles
-  let density = 28;          // vehicles in zone
-  let avgSpeed = 8;          // km/h
+  let flowRate = 0;          // vehicles/min
+  let totalToday = 0;      // vehicles
+  let density = 0;           // vehicles in zone
+  let avgSpeed = 0;          // km/h
 
-  let totalLine: number[] = [20, 22, 25, 28, 31, 27, 26, 29, 33, 30, 28, 32];
-  let carLine: number[]   = [12, 13, 15, 17, 19, 16, 15, 17, 20, 18, 17, 19];
-  let motoLine: number[]  = [8,  9,  10, 11, 12, 11, 11, 12, 13, 12, 11, 13];
+  let totalLine: number[] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  let carLine: number[]   = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  let motoLine: number[]  = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
-  // analytics mock
+  // analytics mock (คงไว้ก่อนเพราะส่วนนี้เรายังไม่ได้เขียนหลังบ้านส่งมา)
   let comp = [
     { name: 'Car', pct: 60 },
     { name: 'Motorcycle', pct: 30 },
@@ -44,40 +45,35 @@
   // model quality (simple mock)
   $: modelQuality = avgSpeed < 3 ? 'LOW' : (avgSpeed < 8 ? 'MED' : 'HIGH');
 
-  // auto refresh
-  function intervalMs(s: string) {
-    if (s === '10s') return 10000;
-    if (s === 'manual') return 0;
-    return 5000;
-  }
-
   let timer: any = null;
-  function tick() {
-    // simulate small changes
-    const rand = (a: number, b: number) => Math.round(a + Math.random() * (b - a));
-    flowRate = rand(35, 60);
-    density = rand(15, 45);
-    avgSpeed = rand(2, 15);
-    totalToday += rand(0, 3);
 
-    // shift lines
-    const nextTotal = Math.max(0, rand(18, 40));
-    const nextCar = Math.max(0, Math.round(nextTotal * 0.6));
-    const nextMoto = Math.max(0, nextTotal - nextCar);
+  // 3. ฟังก์ชันดึงข้อมูลจาก Python API
+  async function fetchStats() {
+    if (!videoFile) return;
+    try {
+      const res = await fetch("http://localhost:8000/stats");
+      const data = await res.json();
 
-    totalLine = [...totalLine.slice(1), nextTotal];
-    carLine = [...carLine.slice(1), nextCar];
-    motoLine = [...motoLine.slice(1), nextMoto];
+      density = data.density;
+      flowRate = data.flowRate || 0;
+      totalToday = data.totalToday;
+      avgSpeed = data.avgSpeed || Math.floor(Math.random() * 10) + 5; // mock speed ไปก่อนถ้า AI ยังไม่ได้คำนวณ
 
-    lastUpdated = new Date();
+      // อัปเดตเส้นกราฟ
+      totalLine = [...totalLine.slice(1), density];
+      carLine = [...carLine.slice(1), Math.round(density * 0.6)];
+      motoLine = [...motoLine.slice(1), density - Math.round(density * 0.6)];
+
+      lastUpdated = new Date();
+    } catch (err) {
+      console.error("Cannot fetch stats API:", err);
+    }
   }
 
-  $: {
-    // rebind interval when refresh changes
-    if (timer) clearInterval(timer);
-    const ms = intervalMs(refresh);
-    if (ms > 0 && mode === 'realtime') timer = setInterval(tick, ms);
-  }
+  // 4. เริ่มดึงข้อมูลอัตโนมัติ ทุกๆ 1 วินาที
+  onMount(() => {
+    timer = setInterval(fetchStats, 1000);
+  });
 
   onDestroy(() => {
     if (timer) clearInterval(timer);
@@ -96,13 +92,11 @@
   }
 
   function barHeight(v: number) {
-    // v max ~ 100
     return `${Math.min(100, Math.max(5, v))}%`;
   }
 </script>
 
 <div class="min-h-screen bg-zinc-950 text-zinc-100">
-  <!-- Header -->
   <div class="border-b border-zinc-800">
     <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between gap-4">
       <div>
@@ -126,7 +120,6 @@
       </div>
     </div>
 
-    <!-- Alert banner -->
     {#if isJam}
       <div class="mx-auto max-w-6xl px-4 pb-4">
         <div class="rounded-2xl border border-red-500/30 bg-red-500/10 px-4 py-3 flex items-center justify-between">
@@ -143,7 +136,6 @@
   </div>
 
   <div class="mx-auto max-w-6xl px-4 py-6 grid gap-4">
-    <!-- KPI row -->
     <div class="grid gap-4 md:grid-cols-3">
       <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
         <div class="text-sm text-zinc-400">Traffic Density</div>
@@ -164,19 +156,19 @@
       </div>
     </div>
 
-    <!-- Real-time monitor -->
     <div class="grid gap-4 lg:grid-cols-2">
-      <!-- Live panel -->
       <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
         <div class="flex items-center justify-between">
           <div class="font-semibold">Live AI View</div>
-          <div class="text-xs text-zinc-400">Overlay: bbox + zone (placeholder)</div>
+          <div class="text-xs text-zinc-400">AI Tracking Active</div>
         </div>
 
-        <div class="mt-4 aspect-video rounded-xl border border-zinc-800 bg-zinc-950 flex items-center justify-center">
-          <div class="text-zinc-500 text-sm">
-            Live Stream Placeholder (put video/frame here)
-          </div>
+        <div class="mt-4 aspect-video rounded-xl border border-zinc-800 bg-zinc-950 flex items-center justify-center overflow-hidden">
+          {#if videoFile}
+            <img src="http://localhost:8000/stream/{videoFile}" alt="Live AI Stream" class="w-full h-full object-cover" />
+          {:else}
+            <div class="text-zinc-500 text-sm">No video source provided</div>
+          {/if}
         </div>
 
         <div class="mt-3 flex flex-wrap gap-2 text-xs">
@@ -186,7 +178,6 @@
         </div>
       </div>
 
-      <!-- Trend graph (simple bars as placeholder) -->
       <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
         <div class="flex items-center justify-between">
           <div class="font-semibold">Real-time Trend (Count)</div>
@@ -208,7 +199,6 @@
       </div>
     </div>
 
-    <!-- Deep analytics -->
     <div class="grid gap-4 lg:grid-cols-2">
       <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5">
         <div class="font-semibold">Vehicle Composition</div>
@@ -249,7 +239,6 @@
       </div>
     </div>
 
-    <!-- Bottom actions -->
     <div class="flex flex-wrap gap-2 justify-end">
       <a href="/" class="rounded-xl border border-zinc-800 bg-zinc-950 px-4 py-2 text-sm">
         ← Back to Input
@@ -259,7 +248,7 @@
       </button>
 
       {#if refresh === 'manual' || mode !== 'realtime'}
-        <button class="rounded-xl bg-zinc-100 text-zinc-950 px-4 py-2 text-sm font-semibold" on:click={tick}>
+        <button class="rounded-xl bg-zinc-100 text-zinc-950 px-4 py-2 text-sm font-semibold" on:click={fetchStats}>
           Refresh Now
         </button>
       {/if}

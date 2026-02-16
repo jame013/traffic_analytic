@@ -56,17 +56,30 @@
     }
 
     loading = true;
-    // ⚠️ หมายเหตุ: ถ้าคุณยังไม่ได้ทำระบบอัปโหลดจริง
-    // เราจะส่ง "ชื่อไฟล์" ไปที่ dashboard ก่อน (mock)
-    // ถ้าจะทำจริง ต้องทำ endpoint upload แล้วส่ง URL/ID แทน
-    const qs = new URLSearchParams({
-      video: file.name
-    });
+    
+    // --- โค้ดใหม่ที่เชื่อมกับ API ---
+    const formData = new FormData();
+    formData.append("file", file);
 
-    await new Promise((r) => setTimeout(r, 300));
-    loading = false;
-
-    goto(`/dashboard?${qs.toString()}`);
+    try {
+      const response = await fetch("http://localhost:8000/upload", {
+        method: "POST",
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      if(data.status === "success") {
+        const qs = new URLSearchParams({
+          video: data.filename // ส่งชื่อไฟล์ที่เซฟใน backend ไปให้ dashboard
+        });
+        goto(`/dashboard?${qs.toString()}`);
+      }
+    } catch (err) {
+      error = "Failed to connect to AI server. Is it running?";
+    } finally {
+      loading = false;
+    }
   }
 </script>
 
