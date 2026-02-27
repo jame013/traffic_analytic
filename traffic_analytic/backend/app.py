@@ -329,6 +329,64 @@ def get_daily_summary(date: str = None):
         },
         "hourly": hourly_data
     }
+# ==========================================
+# 🌟 ส่วนที่ 5: AI Executive Summary (สรุปภาพรวมรายวัน)
+# ==========================================
+import google.generativeai as genai
+
+# 💡 หากมี API Key ของ Gemini นำมาใส่ตรงนี้ได้เลยครับ
+genai.configure(api_key="")
+
+@app.get("/api/ai-insight")
+def get_ai_insight(date: str = None):
+    conn = sqlite3.connect('traffic_log.db')
+    c = conn.cursor()
+    
+    if not date:
+        c.execute("SELECT MAX(substr(timestamp, 1, 10)) FROM traffic_stats")
+        date_row = c.fetchone()
+        date = date_row[0] if date_row[0] else datetime.now().strftime('%Y-%m-%d')
+        
+    # ดึง KPI รวม
+    c.execute("SELECT MAX(total_today), AVG(avg_speed), MAX(density) FROM traffic_stats WHERE timestamp LIKE ?", (f"{date}%",))
+    kpi = c.fetchone()
+    
+    # ดึงช่วงเวลาที่รถติดที่สุด (Peak Hour)
+    c.execute("""
+        SELECT substr(timestamp, 12, 2) as hour, AVG(density) as d 
+        FROM traffic_stats WHERE timestamp LIKE ? 
+        GROUP BY hour ORDER BY d DESC LIMIT 1
+    """, (f"{date}%",))
+    peak = c.fetchone()
+    conn.close()
+    
+    if not kpi or not kpi[0]:
+        return {"insight": "ยังไม่มีข้อมูลเพียงพอสำหรับวิเคราะห์ในวันนี้ครับ"}
+        
+    max_total = kpi[0] or 0
+    avg_speed = round(kpi[1] or 0, 1)
+    max_density = kpi[2] or 0
+    peak_hour = f"{peak[0]}:00" if peak else "N/A"
+    
+    # --- 1. เตรียมข้อมูลทำ Prompt ---
+    prompt = f"""
+    คุณคือ AI ผู้เชี่ยวชาญด้านการวิเคราะห์จราจร
+    จงสรุปภาพรวมการจราจรจากข้อมูลต่อไปนี้ให้อ่านง่าย เป็นภาษาไทย 1-2 ประโยค:
+    - ปริมาณรถสะสม: {max_total} คัน
+    - ความเร็วเฉลี่ยทั้งวัน: {avg_speed} km/h
+    - ความหนาแน่นสูงสุด: {max_density} คันในเฟรม
+    - ช่วงเวลาที่รถติดที่สุด: {peak_hour} น.
+    
+    รูปแบบที่ต้องการ: สรุปสั้นๆ ว่าการจราจรโดยรวมคล่องตัวหรือติดขัด และระบุช่วงเวลาที่ควรระวัง
+    """
+    
+    #--- 2. ส่งข้อมูลให้ LLM (ถ้าตั้งค่า API Key แล้ว เปิดคอมเมนต์โค้ดด้านล่างได้เลยครับ) ---
+    try:
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        response = model.generate_content(prompt)
+        return {"insight": response.text.strip()}
+    except Exception as e:
+        print("LLM Error:", e)
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
