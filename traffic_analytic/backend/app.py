@@ -6,25 +6,24 @@ import shutil
 import cv2
 import supervision as sv
 from ultralytics import YOLO
-import threading
 import numpy as np
 import time
 import os
 
 app = FastAPI()
 
-# อนุญาตให้ Frontend (Svelte) เรียกใช้งาน API ได้
+# อนุญาตให้ Frontend เข้าถึง API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # ในงานจริงควรใส่ URL ของ frontend
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# โหลด Model โชว์แค่ตอนเริ่ม
+# โหลด Model
 model = YOLO('yolov8n.pt') 
 
-# ตัวแปรเก็บสถานะ (Global State) แบบง่ายๆ
+# ตัวแปรเก็บสถานะ Global
 current_stats = {
     "density": 0,
     "flowRate": 0,
@@ -36,7 +35,6 @@ current_stats = {
 
 @app.post("/upload")
 async def upload_video(file: UploadFile = File(...)):
-    # รับไฟล์จากหน้า Upload และเซฟลงเครื่อง
     file_path = f"temp_{file.filename}"
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -45,80 +43,125 @@ async def upload_video(file: UploadFile = File(...)):
 def generate_frames(video_path):
     global current_stats
     
-    # แปลงเป็น Path แบบเต็มเพื่อป้องกัน OpenCV หาไฟล์ไม่เจอ
-    abs_path = os.path.abspath(video_path)
-    print(f"▶️ กำลังเปิดวิดีโอ: {abs_path}")
+    # รีเซ็ตค่าสถิติเมื่อเริ่มวิดีโอใหม่
+    current_stats = {k: 0 for k in current_stats}
     
+    abs_path = os.path.abspath(video_path)
     cap = cv2.VideoCapture(abs_path)
     if not cap.isOpened():
-        print("❌ ERROR: เปิดไฟล์วิดีโอไม่ได้")
+        print(f"❌ ไม่สามารถเปิดวิดีโอได้: {abs_path}")
         return
 
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
-    if width == 0 or height == 0:
-        print("❌ ERROR: อ่านความละเอียดภาพไม่ได้")
-        return
-
-    x1, y1 = int(width * 0.1), int(height * 0.2)
-    x2, y2 = int(width * 0.9), int(height * 0.2)
-    x3, y3 = int(width * 0.9), int(height * 0.8)
-    x4, y4 = int(width * 0.1), int(height * 0.8)
-    polygon = np.array([[x1, y1], [x2, y2], [x3, y3], [x4, y4]])
+    # 1. ปรับขนาด Polygon ให้ครอบคลุมพื้นที่กว้างขึ้น (0.02 - 0.98)
+    polygon = np.array([
+        [int(width * 0.02), int(height * 0.15)],
+        [int(width * 0.98), int(height * 0.15)],
+        [int(width * 0.98), int(height * 0.95)],
+        [int(width * 0.02), int(height * 0.95)]
+    ])
     
-    try:
-        zone = sv.PolygonZone(polygon=polygon)
-        zone_annotator = sv.PolygonZoneAnnotator(zone=zone, color=sv.Color.RED)
-        box_annotator = sv.BoxAnnotator()
-    except Exception as e:
-        print(f"❌ ERROR ตอนตั้งค่า Zone: {e}")
-        return
+    # 2. ตั้งค่าเส้นสำหรับนับรถ (Line Counter) กลางจอ
+    line_start = sv.Point(int(width * 0.05), int(height * 0.6))
+    line_end = sv.Point(int(width * 0.95), int(height * 0.6))
+    line_counter = sv.LineZone(start=line_start, end=line_end)
 
+    # 3. ตั้งค่า Supervision Tools
+    tracker = sv.ByteTrack()
+    zone = sv.PolygonZone(polygon=polygon)
+    
+    box_annotator = sv.BoxAnnotator()
+    label_annotator = sv.LabelAnnotator()
+    zone_annotator = sv.PolygonZoneAnnotator(zone=zone, color=sv.Color.RED, thickness=4)
+    line_annotator = sv.LineZoneAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
+
+    # ตัวแปรสำหรับคำนวณ Flow Rate
+    flow_start_time = time.time()
+    last_total_count = 0
     frame_count = 0
+
     while cap.isOpened():
         success, frame = cap.read()
-        if not success: 
-            print(f"🛑 วิดีโอเล่นจบแล้ว (ส่งไปทั้งหมด {frame_count} เฟรม)")
-            break
+        if not success: break
 
         frame_count += 1
-        
-        # 🌟 ติดเบรก! หน่วงเวลาให้เล่นความเร็วปกติ (~30 FPS)
-        time.sleep(0.03)
 
         try:
+            # --- AI Processing ---
             results = model(frame, verbose=False)[0]
             detections = sv.Detections.from_ultralytics(results)
+            # กรองเฉพาะ รถยนต์, มอเตอร์ไซค์, บัส, รถบรรทุก
             detections = detections[np.isin(detections.class_id, [2, 3, 5, 7])]
+            
+            # อัปเดต Tracker (ต้องมี Tracker รถถึงจะนับ Line ได้แม่นยำ)
+            detections = tracker.update_with_detections(detections)
 
+            # --- คำนวณสถิติ ---
+            # 1. Density (รถในโซนปัจจุบัน)
             is_in_zone = zone.trigger(detections=detections)
-            current_stats["density"] = int(is_in_zone.sum())
+            current_stats["density"] = int(np.sum(is_in_zone))
 
+            # 2. Total Today (นับรถสะสมที่วิ่งผ่านเส้น)
+            line_counter.trigger(detections=detections)
+            total_now = line_counter.in_count + line_counter.out_count
+            current_stats["totalToday"] = total_now
+
+            # 3. Flow Rate (คำนวณทุกๆ 5 วินาที)
+            elapsed_time = time.time() - flow_start_time
+            if elapsed_time >= 5:
+                new_cars = total_now - last_total_count
+                # สูตร: (รถใหม่ / วินาทีที่ผ่านไป) * 60 วินาที = คันต่อนาที
+                current_stats["flowRate"] = round((new_cars / elapsed_time) * 60, 1)
+                
+                # บันทึกค่าใหม่เพื่อรอบถัดไป
+                flow_start_time = time.time()
+                last_total_count = total_now
+
+            # 4. แยกประเภทรถในเฟรมปัจจุบัน
+            current_stats["car"] = int(np.sum(detections.class_id == 2))
+            current_stats["motorcycle"] = int(np.sum(detections.class_id == 3))
+
+            # --- การวาดภาพลงบน Frame ---
+            labels = [f"#{tid} {model.names[cid]}" for cid, tid in zip(detections.class_id, detections.tracker_id)]
+            
             frame = box_annotator.annotate(scene=frame, detections=detections)
+            frame = label_annotator.annotate(scene=frame, detections=detections, labels=labels)
             frame = zone_annotator.annotate(scene=frame)
+            frame = line_annotator.annotate(frame=frame, line_counter=line_counter)
             
-            # 🌟 พิมพ์ตัวเลขเฟรมลงมุมซ้ายบนของวิดีโอ (สีเหลือง)
-            cv2.putText(frame, f"Frame: {frame_count}", (30, 50), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 3)
+            # แสดงข้อมูลบนจอวิดีโอ
+            cv2.putText(frame, f"Flow: {current_stats['flowRate']} v/min", (30, 50), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+            cv2.putText(frame, f"Total: {current_stats['totalToday']}", (30, 90), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
 
+            # --- ส่งออกข้อมูลภาพ ---
             ret, buffer = cv2.imencode('.jpg', frame)
-            if not ret: 
-                continue
+            if not ret: continue
             
-            frame_bytes = buffer.tobytes()
             yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                   b'Content-Type: image/jpeg\r\n\r\n' + buffer.tobytes() + b'\r\n')
 
         except Exception as e:
-            print(f"❌ ERROR ระหว่างรัน AI: {e}")
+            print(f"❌ Error during AI loop: {e}")
             break
+        
+        # ปรับความเร็วการเล่น (0.01 = เร็ว, 0.03 = ปกติ)
+        time.sleep(0.01)
+
+    cap.release()
 
 @app.get("/stream/{filename}")
 def video_stream(filename: str):
-    # ส่งวิดีโอที่ประมวลผลแล้วกลับไปทีละเฟรม
     return StreamingResponse(generate_frames(filename), media_type="multipart/x-mixed-replace; boundary=frame")
 
 @app.get("/stats")
 def get_stats():
-    # Frontend จะดึง endpoint นี้เพื่อเอาไปอัปเดตตัวเลข
     return current_stats
+
+if __name__ == "__main__":
+    import uvicorn
+    # รันเซิร์ฟเวอร์ที่พอร์ต 8000
+    uvicorn.run(app, host="127.0.0.1", port=8000)
