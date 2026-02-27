@@ -1,4 +1,3 @@
-# backend/app.py
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
@@ -9,10 +8,12 @@ from ultralytics import YOLO
 import numpy as np
 import time
 import os
+import sqlite3
+from datetime import datetime
+import torch # 🌟 เพิ่ม torch สำหรับเช็ค GPU
 
 app = FastAPI()
 
-# อนุญาตให้ Frontend เข้าถึง API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,18 +21,54 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# โหลด Model
-model = YOLO('yolov8n.pt') 
+# ==========================================
+# 🌟 ส่วนที่ 1: Database (เพิ่ม avg_speed)
+# ==========================================
+def init_db():
+    conn = sqlite3.connect('traffic_log.db')
+    c = conn.cursor()
+    c.execute('''
+        CREATE TABLE IF NOT EXISTS traffic_stats (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            timestamp TEXT,
+            density INTEGER,
+            flow_rate REAL,
+            total_today INTEGER,
+            car_count INTEGER,
+            motorcycle_count INTEGER,
+            bus_count INTEGER,
+            truck_count INTEGER,
+            avg_speed REAL     -- 🌟 เพิ่มคอลัมน์ความเร็ว
+        )
+    ''')
+    conn.commit()
+    conn.close()
 
-# ตัวแปรเก็บสถานะ Global
+init_db()
+# ==========================================
+
+# ==========================================
+# 🌟 ส่วนที่ 2: โหลด AI โมเดลบนการ์ดจอ (GPU)
+# ==========================================
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
+print(f"🔥 AI กำลังรันอยู่บน: {device.upper()}")
+model = YOLO('yolov8m.pt').to(device) # ใช้ตัว Medium เพื่อความแม่นยำ
+
 current_stats = {
     "density": 0,
     "flowRate": 0,
     "totalToday": 0,
-    "avgSpeed": 0,
+    "avgSpeed": 0, # 🌟 ค่าความเร็วเฉลี่ย
     "car": 0,
-    "motorcycle": 0
+    "motorcycle": 0,
+    "bus": 0,
+    "truck": 0
 }
+
+# ตัวแปร Global สำหรับคำนวณความเร็ว
+vehicle_entry_times = {}
+calculated_speeds = []
+REAL_WORLD_DISTANCE_METERS = 30.0 # สมมติระยะทาง 30 เมตร
 
 @app.post("/upload")
 async def upload_video(file: UploadFile = File(...)):
@@ -41,10 +78,11 @@ async def upload_video(file: UploadFile = File(...)):
     return {"status": "success", "filename": file_path}
 
 def generate_frames(video_path):
-    global current_stats
+    global current_stats, vehicle_entry_times, calculated_speeds
     
-    # รีเซ็ตค่าสถิติเมื่อเริ่มวิดีโอใหม่
     current_stats = {k: 0 for k in current_stats}
+    vehicle_entry_times.clear()
+    calculated_speeds.clear()
     
     abs_path = os.path.abspath(video_path)
     cap = cv2.VideoCapture(abs_path)
@@ -55,7 +93,6 @@ def generate_frames(video_path):
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     
-    # 1. ปรับขนาด Polygon ให้ครอบคลุมพื้นที่กว้างขึ้น (0.02 - 0.98)
     polygon = np.array([
         [int(width * 0.02), int(height * 0.15)],
         [int(width * 0.98), int(height * 0.15)],
@@ -63,12 +100,10 @@ def generate_frames(video_path):
         [int(width * 0.02), int(height * 0.95)]
     ])
     
-    # 2. ตั้งค่าเส้นสำหรับนับรถ (Line Counter) กลางจอ
     line_start = sv.Point(int(width * 0.05), int(height * 0.6))
     line_end = sv.Point(int(width * 0.95), int(height * 0.6))
     line_counter = sv.LineZone(start=line_start, end=line_end)
 
-    # 3. ตั้งค่า Supervision Tools
     tracker = sv.ByteTrack()
     zone = sv.PolygonZone(polygon=polygon)
     
@@ -77,53 +112,98 @@ def generate_frames(video_path):
     zone_annotator = sv.PolygonZoneAnnotator(zone=zone, color=sv.Color.RED, thickness=4)
     line_annotator = sv.LineZoneAnnotator(thickness=2, text_thickness=1, text_scale=0.5)
 
-    # ตัวแปรสำหรับคำนวณ Flow Rate
     flow_start_time = time.time()
+    last_db_log_time = time.time()
     last_total_count = 0
-    frame_count = 0
+
+    # จุดสำหรับคำนวณความเร็ว
+    y_speed_start = height * 0.3
+    y_speed_end = height * 0.8
 
     while cap.isOpened():
         success, frame = cap.read()
         if not success: break
 
-        frame_count += 1
-
         try:
-            # --- AI Processing ---
             results = model(frame, verbose=False)[0]
             detections = sv.Detections.from_ultralytics(results)
-            # กรองเฉพาะ รถยนต์, มอเตอร์ไซค์, บัส, รถบรรทุก
             detections = detections[np.isin(detections.class_id, [2, 3, 5, 7])]
-            
-            # อัปเดต Tracker (ต้องมี Tracker รถถึงจะนับ Line ได้แม่นยำ)
             detections = tracker.update_with_detections(detections)
 
-            # --- คำนวณสถิติ ---
-            # 1. Density (รถในโซนปัจจุบัน)
+            # --- 🌟 ระบบคำนวณความเร็ว (Speed Estimation) ---
+            current_time_loop = time.time()
+            
+            # วาดเส้น Start / End สีฟ้าลงบนวิดีโอ (เพื่อให้เห็นชัดๆ)
+            cv2.line(frame, (0, int(y_speed_start)), (width, int(y_speed_start)), (255, 200, 0), 2)
+            cv2.line(frame, (0, int(y_speed_end)), (width, int(y_speed_end)), (255, 200, 0), 2)
+            cv2.putText(frame, "Speed Start", (10, int(y_speed_start) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 2)
+            cv2.putText(frame, "Speed End", (10, int(y_speed_end) - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 2)
+
+            for i in range(len(detections.xyxy)):
+                t_id = detections.tracker_id[i]
+                if t_id is None: continue
+                
+                y_center = (detections.xyxy[i][1] + detections.xyxy[i][3]) / 2
+                
+                if y_center > y_speed_start and y_center < y_speed_end:
+                    if t_id not in vehicle_entry_times:
+                        vehicle_entry_times[t_id] = current_time_loop
+                
+                elif y_center >= y_speed_end:
+                    if t_id in vehicle_entry_times:
+                        time_taken = current_time_loop - vehicle_entry_times[t_id]
+                        if time_taken > 0:
+                            speed_kmh = (REAL_WORLD_DISTANCE_METERS / time_taken) * 3.6
+                            if 5 < speed_kmh < 150: # กรองค่าเพี้ยน
+                                calculated_speeds.append(speed_kmh)
+                                if len(calculated_speeds) > 20: # เก็บ 20 คันล่าสุด
+                                    calculated_speeds.pop(0)
+                        del vehicle_entry_times[t_id]
+            
+            if len(calculated_speeds) > 0:
+                current_stats["avgSpeed"] = int(sum(calculated_speeds) / len(calculated_speeds))
+            # -----------------------------------------------
+
             is_in_zone = zone.trigger(detections=detections)
             current_stats["density"] = int(np.sum(is_in_zone))
 
-            # 2. Total Today (นับรถสะสมที่วิ่งผ่านเส้น)
             line_counter.trigger(detections=detections)
             total_now = line_counter.in_count + line_counter.out_count
             current_stats["totalToday"] = total_now
 
-            # 3. Flow Rate (คำนวณทุกๆ 5 วินาที)
             elapsed_time = time.time() - flow_start_time
             if elapsed_time >= 5:
                 new_cars = total_now - last_total_count
-                # สูตร: (รถใหม่ / วินาทีที่ผ่านไป) * 60 วินาที = คันต่อนาที
                 current_stats["flowRate"] = round((new_cars / elapsed_time) * 60, 1)
-                
-                # บันทึกค่าใหม่เพื่อรอบถัดไป
                 flow_start_time = time.time()
                 last_total_count = total_now
 
-            # 4. แยกประเภทรถในเฟรมปัจจุบัน
             current_stats["car"] = int(np.sum(detections.class_id == 2))
             current_stats["motorcycle"] = int(np.sum(detections.class_id == 3))
+            current_stats["bus"] = int(np.sum(detections.class_id == 5))
+            current_stats["truck"] = int(np.sum(detections.class_id == 7))
 
-            # --- การวาดภาพลงบน Frame ---
+            current_time = time.time()
+            if current_time - last_db_log_time >= 5.0:
+                conn = sqlite3.connect('traffic_log.db')
+                c = conn.cursor()
+                timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                
+                c.execute("""
+                    INSERT INTO traffic_stats 
+                    (timestamp, density, flow_rate, total_today, car_count, motorcycle_count, bus_count, truck_count, avg_speed) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    timestamp, current_stats["density"], current_stats["flowRate"], current_stats["totalToday"],
+                    current_stats["car"], current_stats["motorcycle"], current_stats["bus"], current_stats["truck"],
+                    current_stats["avgSpeed"]
+                ))
+                conn.commit()
+                conn.close()
+                print(f"💾 [DB Log] {timestamp} | Speed: {current_stats['avgSpeed']} km/h")
+                
+                last_db_log_time = current_time
+
             labels = [f"#{tid} {model.names[cid]}" for cid, tid in zip(detections.class_id, detections.tracker_id)]
             
             frame = box_annotator.annotate(scene=frame, detections=detections)
@@ -131,13 +211,14 @@ def generate_frames(video_path):
             frame = zone_annotator.annotate(scene=frame)
             frame = line_annotator.annotate(frame=frame, line_counter=line_counter)
             
-            # แสดงข้อมูลบนจอวิดีโอ
+            # โชว์ความเร็วเฉลี่ยบนวิดีโอด้วย
+            cv2.putText(frame, f"Avg Speed: {current_stats['avgSpeed']} km/h", (30, 130), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 255), 2)
             cv2.putText(frame, f"Flow: {current_stats['flowRate']} v/min", (30, 50), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
             cv2.putText(frame, f"Total: {current_stats['totalToday']}", (30, 90), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 255, 0), 2)
 
-            # --- ส่งออกข้อมูลภาพ ---
             ret, buffer = cv2.imencode('.jpg', frame)
             if not ret: continue
             
@@ -148,7 +229,6 @@ def generate_frames(video_path):
             print(f"❌ Error during AI loop: {e}")
             break
         
-        # ปรับความเร็วการเล่น (0.01 = เร็ว, 0.03 = ปกติ)
         time.sleep(0.01)
 
     cap.release()
@@ -161,7 +241,94 @@ def video_stream(filename: str):
 def get_stats():
     return current_stats
 
+@app.get("/api/history")
+def get_history():
+    conn = sqlite3.connect('traffic_log.db')
+    c = conn.cursor()
+    c.execute("""
+        SELECT timestamp, density, flow_rate, total_today, car_count, motorcycle_count, bus_count, truck_count, avg_speed 
+        FROM traffic_stats 
+        ORDER BY id DESC LIMIT 12
+    """)
+    rows = c.fetchall()
+    conn.close()
+
+    history = []
+    for row in reversed(rows):
+        time_only = row[0].split(" ")[1]
+        history.append({
+            "time": time_only,
+            "density": row[1],
+            "flowRate": row[2],
+            "totalToday": row[3],
+            "car": row[4],
+            "motorcycle": row[5],
+            "bus": row[6],
+            "truck": row[7],
+            "avgSpeed": row[8] # 🌟 ส่งค่าความเร็วไปให้หน้าเว็บ
+        })
+    return {"history": history}
+@app.get("/api/summary")
+def get_daily_summary(date: str = None):
+    conn = sqlite3.connect('traffic_log.db')
+    c = conn.cursor()
+    
+    # ถ้าไม่ได้ระบุวันที่มา ให้ใช้วันที่ล่าสุดที่มีใน Database
+    if not date:
+        c.execute("SELECT MAX(substr(timestamp, 1, 10)) FROM traffic_stats")
+        latest_date = c.fetchone()[0]
+        date = latest_date if latest_date else datetime.now().strftime('%Y-%m-%d')
+
+    # 1. ดึงวันที่ทั้งหมดที่มีในระบบ (เอาไปทำ Dropdown ให้ User เลือก)
+    c.execute("SELECT DISTINCT substr(timestamp, 1, 10) FROM traffic_stats ORDER BY timestamp DESC")
+    available_dates = [row[0] for row in c.fetchall() if row[0] is not None]
+
+    # 2. ดึง KPI รวมของวันนั้น
+    c.execute("""
+        SELECT 
+            MAX(total_today), 
+            AVG(avg_speed),
+            MAX(density)
+        FROM traffic_stats 
+        WHERE timestamp LIKE ?
+    """, (f"{date}%",))
+    kpi_row = c.fetchone()
+
+    # 3. จัดกลุ่มข้อมูลเป็น "รายชั่วโมง" (00 ถึง 23)
+    c.execute("""
+        SELECT 
+            substr(timestamp, 12, 2) as hour,
+            AVG(density) as avg_density,
+            AVG(avg_speed) as avg_speed,
+            MAX(total_today) as max_total
+        FROM traffic_stats
+        WHERE timestamp LIKE ?
+        GROUP BY hour
+        ORDER BY hour
+    """, (f"{date}%",))
+    hourly_rows = c.fetchall()
+    conn.close()
+
+    # จัดฟอร์แมตข้อมูลเตรียมส่งให้หน้าเว็บ
+    hourly_data = []
+    for row in hourly_rows:
+        hourly_data.append({
+            "hour": f"{row[0]}:00",
+            "avg_density": round(row[1], 1) if row[1] else 0,
+            "avg_speed": round(row[2], 1) if row[2] else 0,
+            "peak_volume": row[3] if row[3] else 0
+        })
+
+    return {
+        "selected_date": date,
+        "available_dates": available_dates,
+        "kpis": {
+            "max_total": kpi_row[0] or 0,
+            "avg_speed": round(kpi_row[1] or 0, 1),
+            "max_density": kpi_row[2] or 0
+        },
+        "hourly": hourly_data
+    }
 if __name__ == "__main__":
     import uvicorn
-    # รันเซิร์ฟเวอร์ที่พอร์ต 8000
     uvicorn.run(app, host="127.0.0.1", port=8000)
