@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { goto } from '$app/navigation';
   import { page } from '$app/stores';
   import { onDestroy } from 'svelte';
 
@@ -106,7 +107,7 @@
   <div class="border-b border-zinc-800">
     <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between gap-4">
       <div>
-        <div class="text-lg font-semibold">🚦 Smart Traffic AI</div>
+        <a href="/" class="text-lg font-semibold">🚦 Smart Traffic AI</a>
         <div class="text-sm text-zinc-400">{camera} • Dashboard</div>
       </div>
 
