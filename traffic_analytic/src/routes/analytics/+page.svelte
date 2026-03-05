@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Chart from 'chart.js/auto';
+  import { DarkMode } from "flowbite-svelte";
 
   let selectedDate = '';
   let availableDates: string[] = [];
@@ -80,18 +81,17 @@
   });
 </script>
 
-<div class="min-h-screen bg-zinc-950 text-zinc-100 p-6">
-  <div class="max-w-6xl mx-auto">
-    
-    <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4 border-b border-zinc-800 pb-4">
+<div class="min-h-screen bg-snow-50 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-100">
+  <div class="border-b border-zinc-800">
+    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between gap-4">
       <div>
         <h1 class="text-2xl font-bold">📊 Historical Data Analytics</h1>
-        <p class="text-zinc-400 text-sm">สรุปสถิติการจราจรย้อนหลังแบบรายวัน</p>
+        <p class="text-zinc-950 dark:text-zinc-400 text-sm">สรุปสถิติการจราจรย้อนหลังแบบรายวัน</p>
       </div>
       
       <div class="flex items-center gap-4">
         <select 
-          class="bg-zinc-900 border border-zinc-700 text-white text-sm rounded-lg p-2.5 outline-none focus:border-blue-500"
+          class="bg-white dark:bg-zinc-900 border border-zinc-700 text-zinc-950 dark:text-white text-sm rounded-lg pr-6 outline-none focus:border-blue-500"
           bind:value={selectedDate}
           on:change={() => fetchSummary(selectedDate)}
         >
@@ -99,34 +99,36 @@
             <option value={d}>{d}</option>
           {/each}
         </select>
-        <a href="/" class="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm transition-colors">
+        <a href="/" class="px-4 py-2 bg-white border border-zinc-700 dark:bg-zinc-800 hover:bg-snow-100 dark:hover:bg-zinc-700 rounded-lg text-sm">
           🏠 กลับหน้าหลัก
         </a>
+        <DarkMode />
       </div>
     </div>
-
+  </div>
+  <div class="max-w-6xl mx-auto px-4 py-6">
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-      <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
-        <div class="text-zinc-400 text-sm mb-1">รถวิ่งผ่านทั้งหมด (คัน)</div>
+      <div class="bg-white dark:bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+        <div class="text-zinc-950 dark:text-zinc-400 text-sm mb-1">รถวิ่งผ่านทั้งหมด (คัน)</div>
         <div class="text-4xl font-bold text-blue-400">{kpis.max_total}</div>
       </div>
-      <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
-        <div class="text-zinc-400 text-sm mb-1">ความเร็วเฉลี่ยทั้งวัน (km/h)</div>
+      <div class="bg-white dark:bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+        <div class="text-zinc-950 dark:text-zinc-400 text-sm mb-1">ความเร็วเฉลี่ยทั้งวัน (km/h)</div>
         <div class="text-4xl font-bold text-emerald-400">{kpis.avg_speed}</div>
       </div>
-      <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
-        <div class="text-zinc-400 text-sm mb-1">ความหนาแน่นสูงสุด (คัน/เฟรม)</div>
+      <div class="bg-white dark:bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6">
+        <div class="text-zinc-950 dark:text-zinc-400 text-sm mb-1">ความหนาแน่นสูงสุด (คัน/เฟรม)</div>
         <div class="text-4xl font-bold text-red-400">{kpis.max_density}</div>
       </div>
     </div>
 
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-      <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 h-[400px] flex flex-col">
+      <div class="bg-white dark:bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 h-100 flex flex-col">
         <h2 class="font-semibold mb-4">📈 ความหนาแน่นของรถ แบ่งตามชั่วโมง (Density)</h2>
         <div class="relative flex-1 w-full"><canvas bind:this={densityCanvas}></canvas></div>
       </div>
       
-      <div class="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 h-[400px] flex flex-col">
+      <div class="bg-white dark:bg-zinc-900/50 border border-zinc-800 rounded-2xl p-6 h-100 flex flex-col">
         <h2 class="font-semibold mb-4">🏎️ ความเร็วเฉลี่ย แบ่งตามชั่วโมง (Speed)</h2>
         <div class="relative flex-1 w-full"><canvas bind:this={speedCanvas}></canvas></div>
       </div>
