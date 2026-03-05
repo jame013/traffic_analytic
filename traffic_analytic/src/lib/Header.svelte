@@ -1,10 +1,16 @@
 <script>
-  import { page } from '$app/state';
   import { DarkMode } from "flowbite-svelte";
+  import { onMount } from 'svelte';
 
-  let lastUpdated = new Date();
-  export let title = '';
-  export let camera = '';
+  let lastUpdated = $state(new Date());
+  let { title = '', camera = '' } = $props();
+
+  onMount(() => {
+    const interval = setInterval(() => {
+      lastUpdated = new Date();
+    }, 1000);
+    return () => clearInterval(interval);
+  });
 
 </script>
 
