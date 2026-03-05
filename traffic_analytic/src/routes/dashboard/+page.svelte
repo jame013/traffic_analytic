@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { goto } from '$app/navigation';
-  import { page } from '$app/stores';
+  import { page } from '$app/state';
   import { onDestroy, onMount } from 'svelte';
   import Chart from 'chart.js/auto';
+  import Header from '$lib/Header.svelte';
 
-  const qp = () => $page.url.searchParams;
+  const qp = () => page.url.searchParams;
   $: videoFile = qp().get('video') ?? '';
   $: camera = qp().get('camera') ?? 'Cam 01 - Main Road';
   $: mode = qp().get('mode') ?? 'realtime';
@@ -211,59 +211,42 @@
   $: isJam = density >= 20;
 </script>
 
-<div class="min-h-screen bg-zinc-950 text-zinc-100">
-  <div class="border-b border-zinc-800">
-    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between gap-4">
-      <div>
-        <a href="/" class="text-lg font-semibold">🚦 Smart Traffic AI</a>
-        <div class="text-sm text-zinc-400">{camera} • Dashboard</div>
-      </div>
-      <div class="flex items-center gap-3 text-sm">
-        <a href="/analytics" class="px-3 py-1.5 rounded-lg border bg-blue-500/10 text-blue-400 border-blue-500/30 hover:bg-blue-500/20 transition-colors">
-          📊 ดูสถิติย้อนหลัง
-        </a>
-        <div class="text-emerald-400 font-semibold animate-pulse">🟢 Live Streaming</div>
-        <div class="text-zinc-400">Update: {lastUpdated.toLocaleTimeString()}</div>
-        <span class="px-2 py-1 rounded-lg border bg-emerald-500/15 text-emerald-300 border-emerald-500/30">
-          Model: HIGH (GPU)
-        </span>
-      </div>
-    </div>
-  </div>
+<div class="min-h-screen bg-snow-50 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100">
+  <Header title="Dashboard" camera={camera} />
 
   <div class="mx-auto max-w-6xl px-4 py-6 grid gap-4">
     <div class="grid gap-4 md:grid-cols-3">
-      <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 flex items-center gap-4">
+      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
         <div class="w-12 h-12 rounded-full flex items-center justify-center {isJam ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500'} text-2xl">
           {isJam ? '⚠️' : '🚗'}
         </div>
         <div>
-          <div class="text-sm text-zinc-400">Traffic Density</div>
-          <div class="text-2xl font-semibold {isJam ? 'text-red-400' : 'text-zinc-100'}">
-            {isJam ? 'HEAVY' : 'FLOW'} <span class="text-sm font-normal text-zinc-400">({density} veh)</span>
+          <div class="text-sm text-zinc-950 dark:text-zinc-400">Traffic Density</div>
+          <div class="text-2xl font-semibold {isJam ? 'text-red-400' : 'text-blue-400'}">
+            {isJam ? 'HEAVY' : 'FLOW'} <span class="text-sm font-normal text-black dark:text-zinc-400">({density} veh)</span>
           </div>
         </div>
       </div>
-      <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 flex items-center gap-4">
+      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
         <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center text-2xl">⚡</div>
         <div>
-          <div class="text-sm text-zinc-400">Flow Rate Now</div>
-          <div class="text-2xl font-semibold text-blue-400">{flowRate} <span class="text-sm font-normal text-zinc-400">/min</span></div>
+          <div class="text-sm text-zinc-950 dark:text-zinc-400">Flow Rate Now</div>
+          <div class="text-2xl font-semibold text-blue-400">{flowRate} <span class="text-sm font-normal text-black dark:text-zinc-400">/min</span></div>
         </div>
       </div>
-      <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 flex items-center gap-4">
-        <div class="w-12 h-12 rounded-full bg-zinc-800 text-zinc-300 flex items-center justify-center text-2xl">📊</div>
+      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
+        <div class="w-12 h-12 rounded-full bg-blue-500/20 text-zinc-300 flex items-center justify-center text-2xl">📊</div>
         <div>
-          <div class="text-sm text-zinc-400">Total Vehicles Today</div>
-          <div class="text-2xl font-semibold">{totalToday.toLocaleString()}</div>
+          <div class="text-sm text-zinc-950 dark:text-zinc-400">Total Vehicles Today</div>
+          <div class="text-2xl font-semibold text-blue-400">{totalToday.toLocaleString()}</div>
         </div>
       </div>
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
-      <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-3">Live AI View</div>
-        <div class="flex-1 aspect-video rounded-xl border border-zinc-800 bg-zinc-950 flex items-center justify-center overflow-hidden">
+        <div class="flex-1 aspect-video rounded-xl border border-zinc-800 bg-snow-50 dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
           {#if videoFile}
             <img src="http://localhost:8000/stream/{videoFile}" alt="Live AI" class="w-full h-full object-cover" />
           {:else}
@@ -272,25 +255,25 @@
         </div>
       </div>
 
-      <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-2">Real-time Traffic Trend</div>
-        <div class="flex-1 w-full relative min-h-[250px]">
+        <div class="flex-1 w-full relative min-h-55">
           <canvas bind:this={trendCanvas}></canvas>
         </div>
       </div>
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
-      <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-2">Vehicle Composition</div>
-        <div class="flex-1 w-full relative min-h-[220px] flex justify-center items-center">
+        <div class="flex-1 w-full relative min-h-55 flex justify-center items-center">
           <canvas bind:this={compCanvas}></canvas>
         </div>
       </div>
 
-      <div class="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-2">Peak Hour Analysis</div>
-        <div class="flex-1 w-full relative min-h-[220px]">
+        <div class="flex-1 w-full relative min-h-55">
           <canvas bind:this={peakCanvas}></canvas>
         </div>
       </div>

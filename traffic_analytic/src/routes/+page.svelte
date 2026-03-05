@@ -1,8 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation';
-  import { DarkMode } from "flowbite-svelte";
-
-  let lastUpdated = new Date();
+  import Header from '$lib/Header.svelte';
 
   // เก็บไฟล์ที่ผู้ใช้เลือก (client-side)
   let file: File | null = null;
@@ -86,17 +84,7 @@
 
 <div class="min-h-screen bg-snow-50 dark:bg-zinc-950 text-zinc-950 dark:text-zinc-100">
   <!-- Header เดิม (เหมือน dashboard) -->
-  <div class="border-b border-zinc-800">
-    <div class="mx-auto max-w-6xl px-4 py-4 flex items-center justify-between gap-4">
-      <div class="text-lg font-semibold">🚦 Smart Traffic AI</div>
-
-      <div class="flex items-center gap-3 text-sm text-zinc-950 dark:text-zinc-400">
-        <div>🟢 Online</div>
-        <div>Last Updated: {lastUpdated.toLocaleTimeString()}</div>
-        <DarkMode />
-      </div>
-    </div>
-  </div>
+   <Header />
 
   <!-- กล่อง Upload อยู่กลางจอ -->
   <div class="mx-auto max-w-6xl px-4 py-10 text-zinc-950 dark:text-zinc-100">

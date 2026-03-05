@@ -27,6 +27,9 @@ npm run dev
 
 # or start the server and open the app in a new browser tab
 npm run dev -- --open
+
+# run backend
+uvicorn app:app --reload --port 8000
 ```
 
 ## Building
