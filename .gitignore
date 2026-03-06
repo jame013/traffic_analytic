@@ -1,5 +1,15 @@
 node_modules
 
+# Upload/temp files
+uploads/
+temp_*
+
+# Local DB files
+data/
+*.db
+*.sqlite
+*.sqlite3
+
 # Output
 .output
 .vercel
