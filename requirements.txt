@@ -1,0 +1,12 @@
+fastapi==0.129.2
+uvicorn[standard]==0.41.0
+python-multipart==0.0.22
+
+numpy==2.4.2
+opencv-python-headless==4.13.0.90
+
+supervision==0.27.0.post1
+ultralytics==8.4.14
+
+google-generativeai==0.8.6
+torch

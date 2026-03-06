@@ -12,6 +12,10 @@ import sqlite3
 from datetime import datetime
 import torch # 🌟 เพิ่ม torch สำหรับเช็ค GPU
 
+DB_DIR = "data"
+DB_PATH = os.path.join(DB_DIR, "traffic_log.db")
+os.makedirs(DB_DIR, exist_ok=True)
+
 app = FastAPI()
 
 app.add_middleware(
@@ -25,7 +29,7 @@ app.add_middleware(
 # 🌟 ส่วนที่ 1: Database (เพิ่ม avg_speed)
 # ==========================================
 def init_db():
-    conn = sqlite3.connect('traffic_log.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
         CREATE TABLE IF NOT EXISTS traffic_stats (
@@ -185,7 +189,7 @@ def generate_frames(video_path):
 
             current_time = time.time()
             if current_time - last_db_log_time >= 5.0:
-                conn = sqlite3.connect('traffic_log.db')
+                conn = sqlite3.connect(DB_PATH)
                 c = conn.cursor()
                 timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 
@@ -243,7 +247,7 @@ def get_stats():
 
 @app.get("/api/history")
 def get_history():
-    conn = sqlite3.connect('traffic_log.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute("""
         SELECT timestamp, density, flow_rate, total_today, car_count, motorcycle_count, bus_count, truck_count, avg_speed 
@@ -270,7 +274,7 @@ def get_history():
     return {"history": history}
 @app.get("/api/summary")
 def get_daily_summary(date: str = None):
-    conn = sqlite3.connect('traffic_log.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     # ถ้าไม่ได้ระบุวันที่มา ให้ใช้วันที่ล่าสุดที่มีใน Database
@@ -339,7 +343,7 @@ genai.configure(api_key="")
 
 @app.get("/api/ai-insight")
 def get_ai_insight(date: str = None):
-    conn = sqlite3.connect('traffic_log.db')
+    conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     
     if not date:
