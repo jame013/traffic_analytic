@@ -1,45 +1,93 @@
-# sv
+# Smart Traffic Analytics
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+ระบบวิเคราะห์การจราจรอัจฉริยะ โดยใช้ AI สำหรับตรวจจับและติดตามยานพาหนะ พร้อมแสดงผลแบบเรียลไทม์ผ่านหน้าเว็บ และสรุปข้อมูลย้อนหลังรายวัน
 
-## Creating a project
-
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
+## Installation
+```
+git clone https://gitlab.com/jame013/ISD_Project.git
+cd ISD_Project
 ```
 
-To recreate this project with the same configuration:
-
-```sh
-# recreate this project
-npx sv create --template minimal --types ts --add tailwindcss="plugins:none" --install npm traffic_analytic
+## Run
+```
+npm run dev:docker
 ```
 
-## Developing
+## Overview
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+โปรเจกต์นี้เป็น full-stack application ที่ประกอบด้วย
 
-```sh
-npm run dev
+- **Backend:** FastAPI
+- **Frontend:** SvelteKit + Tailwind CSS
+- **AI / Computer Vision:** YOLOv8, OpenCV, Supervision, ByteTrack
+- **Database:** SQLite
+- **Deployment / Dev Environment:** Docker + Docker Compose
 
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+ระบบสามารถวิเคราะห์การจราจร และแสดงข้อมูลสำคัญ เช่น
 
-# run backend
-uvicorn app:app --reload --port 8000
-```
+- ความหนาแน่นของรถ (Traffic Density)
+- อัตราการไหลของรถ (Flow Rate)
+- จำนวนรถสะสม
+- ประเภทยานพาหนะ (car / motorcycle / bus / truck)
+- ความเร็วเฉลี่ยโดยประมาณ
+- ข้อมูลย้อนหลังรายวัน
+- AI Insight สำหรับสรุปภาพรวมการจราจร
 
-## Building
+---
 
-To create a production version of your app:
+## Features
 
-```sh
-npm run build
-```
+### Real-time Traffic Analysis
+- ประมวลผลผ่านโมเดล AI
+- ตรวจจับรถด้วย YOLOv8
+- ติดตามวัตถุด้วย ByteTrack
+- นับจำนวนรถที่ผ่านเส้นตรวจจับ
+- ประเมินความเร็วเฉลี่ยจากเวลาที่รถวิ่งผ่านช่วงที่กำหนด
 
-You can preview the production build with `npm run preview`.
+### Dashboard
+- แสดงภาพวิเคราะห์แบบ live stream
+- แสดง Traffic Density
+- แสดง Flow Rate
+- แสดง Total Vehicles Today
+- แสดงแนวโน้มการจราจรแบบเรียลไทม์
+- แสดงสัดส่วนประเภทรถ
+- แสดง Peak Hour Analysis
 
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+### Historical Analytics
+- ดูสรุปสถิติย้อนหลังแบบรายวัน
+- เลือกวันที่ที่มีข้อมูลในระบบได้
+- ดู KPI รายวัน เช่น
+  - รถวิ่งผ่านทั้งหมด
+  - ความเร็วเฉลี่ยทั้งวัน
+  - ความหนาแน่นสูงสุด
+- ดูข้อมูลแยกตามชั่วโมง
+
+### AI Executive Summary
+- สร้างข้อความสรุปภาพรวมจากข้อมูลในวันนั้น
+- รองรับการเชื่อมต่อกับ Gemini API (ถ้าตั้งค่า API Key)
+
+---
+
+## Project Structure
+
+```bash
+.
+├── app.py
+├── requirements.txt
+├── package.json
+├── docker-compose.yml
+├── Dockerfile.api
+├── Dockerfile.web
+├── data/
+├── uploads/
+├── static/
+└── src/
+    ├── lib/
+    │   ├── Header.svelte
+    │   └── assets/
+    └── routes/
+        ├── +page.svelte
+        ├── dashboard/
+        │   └── +page.svelte
+        └── analytics/
+            └── +page.svelte
