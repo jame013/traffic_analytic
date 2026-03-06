@@ -216,7 +216,7 @@
 
   <div class="mx-auto max-w-6xl px-4 py-6 grid gap-4">
     <div class="grid gap-4 md:grid-cols-3">
-      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
         <div class="w-12 h-12 rounded-full flex items-center justify-center {isJam ? 'bg-red-500/20 text-red-500' : 'bg-blue-500/20 text-blue-500'} text-2xl">
           {isJam ? '⚠️' : '🚗'}
         </div>
@@ -227,14 +227,14 @@
           </div>
         </div>
       </div>
-      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
         <div class="w-12 h-12 rounded-full bg-blue-500/20 text-blue-500 flex items-center justify-center text-2xl">⚡</div>
         <div>
           <div class="text-sm text-zinc-950 dark:text-zinc-400">Flow Rate Now</div>
           <div class="text-2xl font-semibold text-blue-400">{flowRate} <span class="text-sm font-normal text-black dark:text-zinc-400">/min</span></div>
         </div>
       </div>
-      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex items-center gap-4">
         <div class="w-12 h-12 rounded-full bg-blue-500/20 text-zinc-300 flex items-center justify-center text-2xl">📊</div>
         <div>
           <div class="text-sm text-zinc-950 dark:text-zinc-400">Total Vehicles Today</div>
@@ -244,9 +244,9 @@
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
-      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-3">Live AI View</div>
-        <div class="flex-1 aspect-video rounded-xl border border-zinc-800 bg-snow-50 dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
+        <div class="flex-1 aspect-video rounded-xl border border-zinc-200 dark:border-zinc-800 bg-snow-50 dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
           {#if videoFile}
             <img src="http://localhost:8000/stream/{videoFile}" alt="Live AI" class="w-full h-full object-cover" />
           {:else}
@@ -255,7 +255,7 @@
         </div>
       </div>
 
-      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-2">Real-time Traffic Trend</div>
         <div class="flex-1 w-full relative min-h-55">
           <canvas bind:this={trendCanvas}></canvas>
@@ -264,14 +264,14 @@
     </div>
 
     <div class="grid gap-4 lg:grid-cols-2">
-      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-2">Vehicle Composition</div>
         <div class="flex-1 w-full relative min-h-55 flex justify-center items-center">
           <canvas bind:this={compCanvas}></canvas>
         </div>
       </div>
 
-      <div class="rounded-2xl border border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
+      <div class="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/40 p-5 flex flex-col">
         <div class="font-semibold mb-2">Peak Hour Analysis</div>
         <div class="flex-1 w-full relative min-h-55">
           <canvas bind:this={peakCanvas}></canvas>

@@ -99,7 +99,7 @@
   <!-- กล่อง Upload อยู่กลางจอ -->
   <div class="mx-auto max-w-6xl px-4 py-10 text-zinc-950 dark:text-zinc-100">
     <div class="min-h-[70vh] flex items-center justify-center">
-      <div class="w-full max-w-2xl rounded-2xl border border-zinc-800 bg-white  dark:bg-zinc-900/40 p-8">
+      <div class="w-full max-w-2xl rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white  dark:bg-zinc-900/40 p-8">
         <div class="text-xl font-semibold">Upload Video</div>
         <div class="mt-1 text-sm dark:text-zinc-400">
           Drag & drop a video here, or choose a file to analyze in Dashboard.
