@@ -344,7 +344,8 @@ def get_daily_summary(date: str = None):
 import google.generativeai as genai
 
 # 💡 หากมี API Key ของ Gemini นำมาใส่ตรงนี้ได้เลยครับ
-genai.configure(api_key="")
+api_key = os.environ.get("GEMINI_API_KEY")
+genai.configure(api_key=api_key)
 
 @app.get("/api/ai-insight")
 def get_ai_insight(date: str = None):
